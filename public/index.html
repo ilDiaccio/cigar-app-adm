@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f59e0b" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Cigar App ADM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=1.2" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <main class="shell">
+      <section class="hero card">
+        <div>
+          <p class="eyebrow">Listino Prezzi Sigari ADM</p>
+          <h1>Ricerca del listino ufficiale</h1>
+          <p class="hero-copy">
+            Scarica il PDF ADM se manca in locale, estrai i sigari e consulta rapidamente codice,
+            confezione, prezzo e prezzo unitario.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <button id="refreshBtn" class="btn btn-primary">Aggiorna da ADM</button>
+          <a
+            id="pdfLink"
+            class="btn btn-secondary hidden"
+            href="/downloads/latest.pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Apri PDF locale
+          </a>
+        </div>
+      </section>
+
+      <section class="status-grid">
+        <article class="card stat">
+          <span class="stat-label">Stato</span>
+          <strong id="statusText">Caricamento...</strong>
+          <small id="statusSubtext">Verifica della cache locale</small>
+        </article>
+        <article class="card stat">
+          <span class="stat-label">Aggiornato al</span>
+          <strong id="updatedAt">-</strong>
+          <small>Data rilevata nel PDF</small>
+        </article>
+        <article class="card stat">
+          <span class="stat-label">Sigari indicizzati</span>
+          <strong id="itemCount">-</strong>
+          <small>Voci trovate nel listino</small>
+        </article>
+      </section>
+
+      <section class="toolbar card">
+        <div class="search-wrap">
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Cerca per nome, codice, confezione..."
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="controls">
+          <button id="favoritesFilterBtn" class="btn btn-secondary btn-fav">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" fill="none" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span>Preferiti</span>
+          </button>
+          <select id="sortSelect">
+            <option value="relevance">Ordina per: Rilevanza</option>
+            <option value="code">Codice ADM</option>
+            <option value="price-asc">Prezzo pacchetto (cresc.)</option>
+            <option value="price-desc">Prezzo pacchetto (decresc.)</option>
+            <option value="unitPrice-asc">Prezzo unitario (cresc.)</option>
+            <option value="unitPrice-desc">Prezzo unitario (decresc.)</option>
+            <option value="pieces-desc">Pezzi per confezione</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="meta-row">
+        <p id="resultSummary" class="muted">Nessun dato disponibile.</p>
+        <p class="muted">
+          Fonte:
+          <a id="sourceLink" href="#" target="_blank" rel="noreferrer">ADM</a>
+        </p>
+      </section>
+
+      <section id="results" class="results-grid"></section>
+      <section id="emptyState" class="card empty hidden">
+        <h2>Nessun risultato</h2>
+        <p>Prova con un nome diverso, un codice ADM o una confezione.</p>
+      </section>
+    </main>
+
+    <script src="/app.js?v=1.2"></script>
+  </body>
+</html>
