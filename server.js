@@ -206,72 +206,113 @@ function parseRowsFromPdfText(text) {
     .map((line) => line.replace(/\r/g, " ").replace(/[•·]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  const itemLines = [];
-  let buffer = "";
-
-  for (const line of lines) {
+  const items = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Salta righe di intestazione
     if (/^codice\s*sigari/i.test(line)) {
       continue;
     }
     if (/^listino\b/i.test(line)) {
       continue;
     }
-    if (!/[a-z]/i.test(line)) {
-      continue;
-    }
-
-    buffer = buffer ? `${buffer} ${line}` : line;
-
-    if (/\d{1,4},\d{2}\s*$/.test(buffer)) {
-      itemLines.push(buffer);
-      buffer = "";
+    
+    // Se la riga contiene "da X pezzi/pezzo/sigari", prova ad estrarre i dati
+    if (/da\s+\d+\s+(pezzi|pezzo|sigari)/i.test(line)) {
+      const packMatch = line.match(/da\s+(\d+)\s+(pezzi|pezzo|sigari)/i);
+      const priceMatches = line.match(/(\d{1,3}(?:\.\d{3})*,\d{2})/g);
+      
+      if (!packMatch || !priceMatches || priceMatches.length < 2) {
+        continue;
+      }
+      
+      const priceStr = priceMatches[priceMatches.length - 1];
+      const price = parseItalianNumber(priceStr);
+      const pieces = parseInt(packMatch[1]);
+      const unitPrice = pieces && price ? Number((price / pieces).toFixed(2)) : null;
+      
+      let code = "";
+      let name = "";
+      
+      // PATTERN 1: Nome prima di "da X pezzi" sulla stessa riga
+      const packStart = line.indexOf(packMatch[0]);
+      if (packStart > 0) {
+        const beforePack = line.substring(0, packStart).trim();
+        
+        // Controlla se c'è un codice all'inizio (3-5 cifre)
+        const codeMatch = beforePack.match(/^(\d{3,5})/);
+        if (codeMatch) {
+          code = codeMatch[1];
+          name = beforePack.substring(codeMatch[0].length).trim();
+        } else {
+          name = beforePack;
+        }
+      }
+      
+      // PATTERN 2: Codice sulla riga precedente (3-5 cifre)
+      if (!code && i > 0) {
+        const prevLine = lines[i - 1];
+        if (/^\d{3,5}$/.test(prevLine)) {
+          code = prevLine;
+        }
+      }
+      
+      // PATTERN 3: Codice+Nome sulla riga precedente (3-5 cifre)
+      if (!code && !name && i > 0) {
+        const prevLine = lines[i - 1];
+        const codeMatch = prevLine.match(/^(\d{3,5})(.+)/);
+        if (codeMatch) {
+          code = codeMatch[1];
+          name = codeMatch[2].trim();
+        }
+      }
+      
+      // PATTERN 4: Codice su riga -2, Nome su riga -1 (3-5 cifre)
+      if (!code && !name && i > 1) {
+        const prevLine1 = lines[i - 1];
+        const prevLine2 = lines[i - 2];
+        
+        if (/^\d{3,5}$/.test(prevLine2) && /^[A-Z]/.test(prevLine1) && !/da\s+\d+/i.test(prevLine1)) {
+          code = prevLine2;
+          name = prevLine1.trim();
+        }
+      }
+      
+      // Se abbiamo trovato dati validi, aggiungi l'item
+      if (code || name) {
+        items.push({
+          code: code,
+          name: cleanName(name),
+          pack: `da ${packMatch[1]} ${packMatch[2]}`,
+          pieces: pieces,
+          price: price,
+          unitPrice: unitPrice,
+          priceLabel: formatPrice(price),
+          unitPriceLabel: formatPrice(unitPrice),
+          searchText: normalizeText(`${code} ${name} da ${packMatch[1]} ${packMatch[2]}`)
+        });
+      }
     }
   }
-
-  const found = [];
-
-  for (const rawLine of itemLines) {
-    const normalizedLine = rawLine
-      .replace(/([A-Za-z])da\s+(\d{1,3}\s+(?:pezzi|sigari))/g, "$1 da $2")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const match = normalizedLine.match(
-      /^(\d{3,5})(.+?)((?:da\s+)?\d{1,3}\s+(?:pezzi|sigari))\s*(\d{1,4},\d{2})$/i
-    );
-
-    if (!match) {
-      continue;
-    }
-
-    const code = match[1].trim();
-    const name = cleanName(match[2]);
-    const pack = cleanName(match[3]);
-    const price = parseItalianNumber(match[4]);
-    const pieces = extractPieces(pack);
-    const unitPrice = pieces && price ? Number((price / pieces).toFixed(2)) : null;
-
-    found.push({
-      code,
-      name,
-      pack,
-      pieces,
-      price,
-      unitPrice,
-      priceLabel: formatPrice(price),
-      unitPriceLabel: formatPrice(unitPrice),
-      searchText: normalizeText(`${code} ${name} ${pack}`)
-    });
-  }
-
+  
+  // Rimuovi duplicati per codice
   const unique = new Map();
-  for (const item of found) {
-    if (!unique.has(item.code)) {
-      unique.set(item.code, item);
+  for (const item of items) {
+    // Usa il codice come chiave, o un ID unico se manca il codice
+    const key = item.code || `no-code-${items.indexOf(item)}`;
+    if (!unique.has(key)) {
+      unique.set(key, item);
     }
   }
-
-  return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
+  
+  // Filtra solo items con almeno un codice o un nome valido
+  const validItems = [...unique.values()].filter(item => {
+    return (item.code && item.code.length > 0) || (item.name && item.name.trim().length > 0);
+  });
+  
+  return validItems.sort((a, b) => a.name.localeCompare(b.name, "it"));
 }
 
 async function refreshCatalog() {
