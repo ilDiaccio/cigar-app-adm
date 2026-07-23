@@ -16,12 +16,11 @@ const PDF_FILE = path.join(DATA_DIR, "adm-sigari-latest.pdf");
 const CATALOG_FILE = path.join(DATA_DIR, "catalog.json");
 
 const SOURCE_PAGES = [
-  "https://www.adm.gov.it/portale/en/monopoli/tabacchi/prezzi/listino/logista-s.p.a",
-  "https://www.adm.gov.it/portale/en/monopoli/tabacchi/prezzi/listino/manifatture-sigaro-toscano-spa"
+  "https://www.adm.gov.it/portale/monopoli/tabacchi/prezzi/prezzi_pubblico"
 ];
 
 const FALLBACK_PDF_URLS = [
-  "https://www.adm.gov.it/portale/documents/20182/11067932/CDI+SIGARI.pdf/749d9d8f-8da7-264d-1c65-9f7ae20464a0"
+  "https://www.adm.gov.it/portale/documents/20182/1106899/2-LIST-22-07-2026.pdf/bd227503-9779-bf56-c817-c19cfb853a64"
 ];
 
 let refreshPromise = null;
@@ -122,8 +121,16 @@ function toAbsoluteUrl(base, maybeRelative) {
 function scoreCandidate(url = "") {
   const lower = url.toLowerCase();
   let score = 0;
-  if (lower.includes("sigari")) {
-    score += 10;
+  
+  // IMPORTANTE: Distinguere tra "sigari" e "sigarette"
+  if (lower.includes("sigari") && !lower.includes("sigarette") && !lower.includes("sigaretti")) {
+    score += 20; // Priorità massima per "sigari" puri
+  }
+  if (lower.includes("sigarette")) {
+    score -= 10; // Penalizza le sigarette
+  }
+  if (lower.includes("sigaretti")) {
+    score -= 10; // Penalizza i sigaretti
   }
   if (lower.includes("/documents/")) {
     score += 5;
@@ -134,12 +141,16 @@ function scoreCandidate(url = "") {
   if (lower.includes("cdi")) {
     score += 1;
   }
+  if (lower.includes("list")) {
+    score += 2;
+  }
+  
   return score;
 }
 
 function collectPdfCandidates(pageUrl, html) {
   const $ = cheerio.load(html);
-  const candidates = new Set();
+  const candidates = [];
 
   $("a[href]").each((_, element) => {
     const href = ($(element).attr("href") || "").trim();
@@ -148,27 +159,28 @@ function collectPdfCandidates(pageUrl, html) {
     if (!href) {
       return;
     }
-    if (!href.toLowerCase().includes(".pdf") && !text.includes("sigari")) {
+    if (!href.toLowerCase().includes(".pdf")) {
       return;
     }
 
     const absolute = toAbsoluteUrl(pageUrl, href);
     if (absolute) {
-      candidates.add(absolute);
+      candidates.push({
+        url: absolute,
+        text: text,
+        isSigari: text.includes("sigari") && !text.includes("sigarette") && !text.includes("sigaretti")
+      });
     }
   });
 
-  const rawMatches = html.match(/(?:https?:\/\/|\/)[^"'<> ]+?\.pdf(?:\?[^"'<> ]*)?/gi) || [];
-  for (const match of rawMatches) {
-    const absolute = toAbsoluteUrl(pageUrl, match);
-    if (absolute) {
-      candidates.add(absolute);
-    }
-  }
-
-  return [...candidates]
-    .filter((url) => url.toLowerCase().includes(".pdf"))
-    .sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+  return candidates
+    .sort((a, b) => {
+      // Priorità: prima i sigari, poi per score
+      if (a.isSigari && !b.isSigari) return -1;
+      if (!a.isSigari && b.isSigari) return 1;
+      return scoreCandidate(b.url) - scoreCandidate(a.url);
+    })
+    .map(c => c.url);
 }
 
 async function discoverLatestPdfUrl() {
@@ -181,9 +193,10 @@ async function discoverLatestPdfUrl() {
     try {
       const response = await axios.get(pageUrl, { headers, timeout: 15000 });
       const candidates = collectPdfCandidates(pageUrl, response.data);
-      const preferred = candidates.find((url) => url.toLowerCase().includes("sigari"));
-      if (preferred) {
-        return { sourcePage: pageUrl, pdfUrl: preferred };
+      
+      // Il primo candidato dovrebbe essere quello dei sigari (grazie al sort)
+      if (candidates.length > 0) {
+        return { sourcePage: pageUrl, pdfUrl: candidates[0] };
       }
     } catch {
       continue;
@@ -426,6 +439,11 @@ function sortItems(items, sort, query) {
 
 app.get("/api/status", async (_req, res) => {
   try {
+    // Disabilita il caching per le API
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    
     let catalog = readCatalog();
 
     if (!catalog) {
@@ -444,6 +462,11 @@ app.get("/api/status", async (_req, res) => {
 
 app.post("/api/refresh", async (_req, res) => {
   try {
+    // Disabilita il caching per le API
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    
     const catalog = await refreshCatalog();
     res.json({ ok: true, meta: catalog.meta, count: catalog.items.length });
   } catch (error) {
@@ -453,6 +476,11 @@ app.post("/api/refresh", async (_req, res) => {
 
 app.get("/api/search", async (req, res) => {
   try {
+    // Disabilita il caching per le API
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    
     let catalog = readCatalog();
     if (!catalog) {
       catalog = await refreshCatalog();

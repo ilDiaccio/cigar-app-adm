@@ -121,19 +121,11 @@ function renderResults(items, query) {
       <div class="kpis">
         <div class="kpi">
           <span>Confezione</span>
-          <strong>${highlight(item.pack || "-", query)}</strong>
+          <strong>${item.pieces ?? highlight(item.pack || "-", query)}</strong>
         </div>
         <div class="kpi">
           <span>Prezzo</span>
           <strong>${escapeHtml(item.priceLabel || "-")}</strong>
-        </div>
-        <div class="kpi">
-          <span>Pezzi</span>
-          <strong>${item.pieces ?? "-"}</strong>
-        </div>
-        <div class="kpi">
-          <span>Codice ADM</span>
-          <strong>${escapeHtml(item.code)}</strong>
         </div>
       </div>
     `;
